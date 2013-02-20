@@ -1,0 +1,234 @@
+;Majority of codebase taken from nerdynights tutorials.  Amazing stuff:
+;http://nintendoage.com/forum/messageview.cfm?catid=22&threadid=7155
+;CHR data created by James Gorz <nrezinorn@gmail.com> taken from 
+;heatsynclabs.org, used under the creative commons license ?  maybe?
+;special thanks to jero32 on #nesdev
+
+.segment "HEADER"
+	
+	.byte	"NES", $1A	; iNES header identifier
+	.byte	2		; 2x 16KB PRG code
+	.byte	1		; 1x  8KB CHR data
+	.byte	$01, $00	; mapper 0, vertical mirroring
+	.byte   $02 		; PRG RAMSIZE in 8K
+	.byte   $00		; PAL mode
+;;;;;;;;;;;;;;;
+
+;;; "nes" linker config requires a STARTUP section, even if it's empty
+.segment "STARTUP"
+
+.segment "CODE"
+
+reset:
+
+	sei			; disable IRQs
+	cld			; disable decimal mode
+	ldx	#$40
+	stx	$4017		; disable APU frame IRQ
+	ldx	#$ff		; set up stack
+	txs			;  .
+	inx			; now X = 0
+	stx	$2000		; disable NMI
+	stx	$2001		; disable rendering
+	stx	$4010		; disable DMC IRQs
+
+	;; first wait for vblank to make sure PPU is ready
+vblankwait1:
+	bit	$2002
+	bpl	vblankwait1
+
+clear_memory:
+	lda	#$00
+	sta	$0000, x
+	sta	$0100, x
+	sta	$0300, x
+	sta	$0400, x
+	sta	$0500, x
+	sta	$0600, x
+	sta	$0700, x
+	lda	#$fe
+	sta	$0200, x	; move all sprites off screen
+	inx
+	bne	clear_memory
+
+	;; second wait for vblank, PPU is ready after this
+vblankwait2:
+	bit	$2002
+	bpl	vblankwait2
+
+clear_nametables:
+	lda	$2002		; read PPU status to reset the high/low latch
+	lda	#$20		; write the high byte of $2000
+	sta	$2006		;  .
+	lda	#$00		; write the low byte of $2000
+	sta	$2006		;  .
+	ldx	#$08		; prepare to fill 8 pages ($800 bytes)
+	ldy	#$00		;  x/y is 16-bit counter, high byte in x
+	lda	#$FF		; fill with tile $27 (a solid box)
+@loop:
+	sta	$2007
+	dey
+	bne	@loop
+	dex
+	bne	@loop
+	
+load_palettes:
+	lda	$2002		; read PPU status to reset the high/low latch
+	lda	#$3f		; write the high byte of $3f00
+	sta	$2006		;  .
+	lda	#$00		; write the low byte of $3f00
+	sta	$2006		;  .
+	ldx	#$20
+@loop:
+	lda	palette, x	; load palette byte
+	sta	$2007		; write to PPU
+	inx			; set index to next byte
+	cpx	#$20
+	bne	@loop		; if x = $20, 32 bytes copied, all done
+	
+vblankwait3:	
+	bit	$2002
+	bpl	vblankwait3
+	
+load_NameTable:
+	lda	$2002		; read PPU status to reset the high/low latch
+	lda	#$20
+	sta	$2006		; write the high byte of $2000 address
+	lda	#$00
+	sta	$2006		; write the low byte of $2000 address
+	ldx	#$04		; start out at 0
+        ldy	#$00		; loop 2 times to get 512 
+        lda	#<background    ; read low addr of background
+        sta	$10		; store low in $10
+	lda     #>background	; read high addr of background
+        sta     $11		; store high $11
+@loop:
+	lda	($10), y	; load data from address (background + y)
+	sta	$2007		; write to PPU
+	iny			; x = x + 1
+	bne	@loop
+	inc 	$11
+	dex	
+	bne	@loop
+
+init_sprite0:
+	LDA #$00
+	@loop:
+        lda     sprites, x      ; load byte from ROM address (sprites + x)
+        sta     $0200, x        ; store into RAM address ($0200 + x)
+        inx                     ; x = x + 1
+        cpx     #$04            ; x == $04? // 1 sprite aka sprite 0
+        bne     @loop           ; No, jump to @loop, yes, fall through
+
+;;;;;;;;;;;;;;;;;;
+	lda	#%10000000	; enable NMI 
+	sta	$2000		;  background from pattern table 1
+	lda	#%00011110	; enable sprites, enable background,
+	sta	$2001		;  no clipping on left
+
+	
+forever:
+	jmp	forever
+
+;ToggleBGBank:
+;       lda     %00011100        ; toggle and use table 1 for bg now
+;       sta     $2000           ; to load the rest of the data to the nametable
+;	rts
+;;; 
+;;; NMI handler
+;;; 
+
+nmi:
+
+	;; push registers onto the stack
+	pha	
+	txa
+	pha	
+	tya
+	pha
+
+	        ;; Copy sprites at $0200 in RAM into sprite VRAM via DMA.
+        lda     #$00            ; set the low byte (00) of the RAM address
+        sta     $2003
+        lda     #$02            ; set the high byte (02) of the RAM address 
+        sta     $4014           ; start the transfer
+	rti			; return from interrupt
+
+        ; all we care about here is waiting for sprite0 hit
+        ; change what table we fetch tiles from pattern tables
+        lda #$00
+        sta $2006               ; clear ppu regs
+        sta $2006
+	
+	LDA #%10000000   ; enable NMI, sprites from Pattern Table 0, background from Pattern Table 0
+        STA $2000       ; start with nametable = 0 for status bar
+
+        LDA #%00011110   ; enable sprites, enable background, no clipping on left side
+        STA $2001
+
+WaitNotSprite0:
+        lda $2002	; read PPUSCROLL
+        and #%01000000
+        bne WaitNotSprite0   ; wait until sprite 0 not hit
+
+WaitSprite0:
+        lda $2002
+        and #%01000000
+        beq WaitSprite0      ; wait until sprite 0 is hit
+
+
+        STA $2006
+        STA $2006
+        LDA #%10010000   ; enable NMI, sprites from Pattern Table 0, background from Pattern Table 1
+        STA $2000
+        lda #$10
+WaitScanline:
+        dex
+        bne WaitScanline
+
+        pla             ;Restore all regs and exit.
+        tay
+        pla
+        tax
+        pla
+
+        rti                     ; return from interrupt
+
+
+background:
+	.incbin "HSLFullNT4.nam"
+
+palette:
+	;; Background palette
+	.byte 	$0D,$05,$27,$22
+	.byte 	$0D,$05,$27,$22
+	.byte 	$0D,$05,$27,$22
+	.byte 	$0D,$05,$27,$22
+	;; Sprite palette
+	.byte	$0F,$22,$27,$18
+	.byte	$22,$22,$15,$14
+ 	.byte	$22,$22,$38,$3C
+	.byte	$22,$22,$15,$14
+
+sprites:
+	.byte   $6F, $FF, $00, $F8 ; sprite 0
+
+;;;;;;;;;;;;;;  
+  
+.segment "VECTORS"
+
+	.word	0, 0, 0		; Unused, but needed to advance PC to $fffa.
+	;; When an NMI happens (once per frame if enabled) the label nmi:
+	.word	nmi
+	;; When the processor first turns on or is reset, it will jump
+	;; to the label reset:
+	.word	reset
+	;; External interrupt IRQ is not used in this tutorial 
+	.word	0
+  
+;;;;;;;;;;;;;;  
+  
+.segment "CHARS"
+
+	.incbin	"HSLTop0.chr"	; includes 4KB graphics for top
+	.incbin "HSLBot.chr"	; includes 4KB graphics for bottom
