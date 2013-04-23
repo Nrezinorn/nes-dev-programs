@@ -1,0 +1,369 @@
+ca65 V2.13.9 - (C) Copyright 1998-2011 Ullrich von Bassewitz
+Main file   : HSL-text-move.asm
+Current file: HSL-text-move.asm
+
+000000r 1               ;  less headaches macro for adc ...
+000000r 1               .macro addone addr
+000000r 1                   clc
+000000r 1                   lda addr
+000000r 1                   adc #$01
+000000r 1                   sta addr
+000000r 1               .endmacro
+000000r 1               
+000000r 1               .macro subone addr
+000000r 1                   sec
+000000r 1                   lda addr
+000000r 1                   sbc #$01
+000000r 1                   sta addr
+000000r 1               .endmacro
+000000r 1               
+000000r 1               .segment "HEADER"
+000000r 1               
+000000r 1  4E 45 53 1A  	.byte	"NES", $1A	; iNES header identifier
+000004r 1  02           	.byte	2		; 2x 16KB PRG code
+000005r 1  01           	.byte	1		; 1x  8KB CHR data
+000006r 1  01 00        	.byte	$01, $00	; mapper 0, vertical mirroring
+000008r 1  02           	.byte   $02 		; PRG RAMSIZE in 8K
+000009r 1  00           	.byte   $00		; PAL mode
+00000Ar 1               ;;;;;;;;;;;;;;;
+00000Ar 1               
+00000Ar 1               ;;; "nes" linker config requires a STARTUP section, even if it's empty
+00000Ar 1               .segment "STARTUP"
+000000r 1               
+000000r 1               .segment "CODE"
+000000r 1               reset:
+000000r 1  78           	sei			; disable IRQs
+000001r 1  D8           	cld			; disable decimal mode
+000002r 1  A2 40        	ldx	#$40
+000004r 1  8E 17 40     	stx	$4017		; disable APU frame IRQ
+000007r 1  A2 FF        	ldx	#$ff		; set up stack
+000009r 1  9A           	txs			;  .
+00000Ar 1  E8           	inx			; now X = 0
+00000Br 1  8E 00 20     	stx	$2000		; disable NMI
+00000Er 1  8E 01 20     	stx	$2001		; disable rendering
+000011r 1  8E 10 40     	stx	$4010		; disable DMC IRQs
+000014r 1               
+000014r 1               	;; first wait for vblank to make sure PPU is ready
+000014r 1               vblankwait1:
+000014r 1  2C 02 20     	bit	$2002   ; when bit 7 is true sets negative flag to positive
+000017r 1  10 FB        	bpl	vblankwait1 ; continue when negative flag is set to true
+000019r 1               
+000019r 1               clear_memory:
+000019r 1  A9 00        	lda	#$00
+00001Br 1  95 00        	sta	$0000, x
+00001Dr 1  9D 00 01     	sta	$0100, x
+000020r 1  9D 00 03     	sta	$0300, x
+000023r 1  9D 00 04     	sta	$0400, x
+000026r 1  9D 00 05     	sta	$0500, x
+000029r 1  9D 00 06     	sta	$0600, x
+00002Cr 1  9D 00 07     	sta	$0700, x
+00002Fr 1  A9 FE        	lda	#$fe
+000031r 1  9D 00 02     	sta	$0200, x	; move all sprites off screen
+000034r 1  E8           	inx
+000035r 1  D0 E2        	bne	clear_memory
+000037r 1               
+000037r 1               	;; second wait for vblank, PPU is ready after this
+000037r 1               vblankwait2:
+000037r 1  2C 02 20     	bit	$2002
+00003Ar 1  10 FB        	bpl	vblankwait2
+00003Cr 1               
+00003Cr 1               clear_nametables:
+00003Cr 1  AD 02 20     	lda	$2002		; read PPU status to reset the high/low latch
+00003Fr 1  A9 20        	lda	#$20		; write the high byte of $2000
+000041r 1  8D 06 20     	sta	$2006		;  .
+000044r 1  A9 20        	lda	#$20		; write the low byte of $2000
+000046r 1  8D 06 20     	sta	$2006		;  .
+000049r 1  A2 08        	ldx	#$08		; prepare to fill 8 pages ($800 bytes)
+00004Br 1  A0 00        	ldy	#$00		;  x/y is 16-bit counter, high byte in x
+00004Dr 1  A9 FE        	lda	#$FE		; fill with tile $27 (empty box tile)
+00004Fr 1               @loop:
+00004Fr 1  8D 07 20     	sta	$2007
+000052r 1  88           	dey
+000053r 1  D0 FA        	bne	@loop
+000055r 1  CA           	dex
+000056r 1  D0 F7        	bne	@loop
+000058r 1               
+000058r 1               load_palettes:
+000058r 1  AD 02 20     	lda	$2002		; read PPU status to reset the high/low latch
+00005Br 1  A9 3F        	lda	#$3f		; write the high byte of $3f00
+00005Dr 1  8D 06 20     	sta	$2006		;  .
+000060r 1  A9 00        	lda	#$00		; write the low byte of $3f00
+000062r 1  8D 06 20     	sta	$2006		;  .
+000065r 1  A2 20        	ldx	#$20
+000067r 1               @loop:
+000067r 1  BD rr rr     	lda	palette, x	; load palette byte
+00006Ar 1  8D 07 20     	sta	$2007		; write to PPU
+00006Dr 1  E8           	inx			; set index to next byte
+00006Er 1  E0 20        	cpx	#$20
+000070r 1  D0 F5        	bne	@loop		; if x = $20, 32 bytes copied, all done
+000072r 1               
+000072r 1               vblankwait3:
+000072r 1  2C 02 20     	bit	$2002
+000075r 1  10 FB        	bpl	vblankwait3
+000077r 1               
+000077r 1               load_background:
+000077r 1  AD 02 20     	lda	$2002		; read PPU status to reset the high/low latch
+00007Ar 1  A9 20        	lda	#$20
+00007Cr 1  8D 06 20     	sta	$2006		; write the high byte of $2000 address
+00007Fr 1  A9 00        	lda	#$00
+000081r 1  8D 06 20     	sta	$2006		; write the low byte of $2000 address
+000084r 1  A2 04        	ldx	#$04		; start out at 0
+000086r 1  A0 00            ldy #$00        ; loop 4 times to load 960 bytes
+000088r 1  A9 rr            lda #<background
+00008Ar 1  85 10            sta $10
+00008Cr 1  A9 rr            lda #>background
+00008Er 1  85 11            sta $11
+000090r 1               @loop:
+000090r 1  B1 10        	lda	($10), y	; load data from address (background + x)
+000092r 1  8D 07 20     	sta	$2007		; write to PPU
+000095r 1  C8           	iny
+000096r 1  D0 F8            bne @loop
+000098r 1  E6 11            inc $11
+00009Ar 1  CA               dex
+00009Br 1  D0 F3        	bne	@loop
+00009Dr 1               
+00009Dr 1               init_sprite0:
+00009Dr 1  A9 00            LDA #$00
+00009Fr 1               @loop:
+00009Fr 1  BD rr rr         lda     sprites, x      ; load byte from ROM address (sprites + x)
+0000A2r 1  9D 00 02         sta     $0200, x        ; store into RAM address ($0200 + x)
+0000A5r 1  E8               inx                     ; x = x + 1
+0000A6r 1  E0 58            cpx     #$58            ; x == $28? // sprite data
+0000A8r 1  D0 F5            bne     @loop           ; No, jump to @loop, yes, fall through
+0000AAr 1               
+0000AAr 1               
+0000AAr 1  A9 80        	lda #%10000000  ; enable nmi sprites from pattern table 0
+0000ACr 1  8D 00 20     	sta	$2000		;  background from pattern table 0
+0000AFr 1               ;	lda	#%00011110	; enable sprites, enable background,
+0000AFr 1               ;	sta	$2001		;  no clipping on left
+0000AFr 1               
+0000AFr 1               initvars:
+0000AFr 1  A9 00            LDA #$00
+0000B1r 1  85 00            STA $00
+0000B3r 1  85 01            STA $01
+0000B5r 1  85 02            STA $02
+0000B7r 1  A9 01            LDA #$01
+0000B9r 1  85 03            STA $03
+0000BBr 1               
+0000BBr 1               forever:
+0000BBr 1  4C rr rr     	jmp	forever
+0000BEr 1               ;;;
+0000BEr 1               ;;; NMI handler
+0000BEr 1               ;;;
+0000BEr 1               
+0000BEr 1  xx xx xx xx  .align 256 ; align on pages otherwise our cycle count will be inaccurate
+0000C2r 1  xx xx xx xx  
+0000C6r 1  xx xx xx xx  
+000100r 1               nmi:
+000100r 1                   ; save registers to stack
+000100r 1  48               pha ; 3 cycles
+000101r 1  8A               txa ; 2 cycles
+000102r 1  48               pha ; 3 cycles
+000103r 1  98               tya ; 2 cycles
+000104r 1  48               pha ; 3 cycles = 13 cycles so far...
+000105r 1               
+000105r 1                   ; enable nmi turn on sprites and background
+000105r 1  A9 80            lda #%10000000  ; enable nmi sprites from pattern table 0  2 cycles
+000107r 1  8D 00 20         sta $2000       ;  background from pattern table 0  ; 4 cycles  = 18 cycles
+00010Ar 1  A9 1E            lda #%00011110  ; enable sprites, enable background,
+00010Cr 1  8D 01 20         sta $2001       ;  no clipping on left
+00010Fr 1               
+00010Fr 1                   ;copy sprite data to OAM RAM via DMA register
+00010Fr 1  A9 00            lda #$00    ; low byte  ram addr - 2 cycles
+000111r 1  8D 03 20         sta $2003   ; 4 cycles
+000114r 1  A9 02            lda #$02    ; high byte ram addr - 2 cycles
+000116r 1  8D 14 40         sta $4014   ; start xfer  4 cycles + 512 cycles, total cycle count so far 18 + 16 + 512 = 546
+000119r 1                               ; which is into scanline 2, not viewable which is good.
+000119r 1               
+000119r 1               WaitNotSprite0:
+000119r 1  AD 02 20         lda $2002       ; read PPUSCROLL
+00011Cr 1  29 40            and #%01000000
+00011Er 1  D0 F9            bne WaitNotSprite0   ; wait until sprite 0 not hit
+000120r 1               
+000120r 1               WaitSprite0:
+000120r 1  AD 02 20         lda $2002
+000123r 1  29 40            and #%01000000
+000125r 1  F0 F9            beq WaitSprite0      ; wait until sprite 0 is hit
+000127r 1               
+000127r 1  A2 D0            ldx #$D0
+000129r 1               WaitScanline:
+000129r 1  CA               dex
+00012Ar 1  D0 FD            bne WaitScanline
+00012Cr 1               
+00012Cr 1               ;    nop
+00012Cr 1               ;    nop
+00012Cr 1               ;    nop
+00012Cr 1               ;    nop
+00012Cr 1               ;    nop
+00012Cr 1               ;    nop
+00012Cr 1               
+00012Cr 1               ;enabling this loop updates us past the cycle we need to flip at
+00012Cr 1               ;    ldx #$10
+00012Cr 1               ;WaitFineScanline:
+00012Cr 1               ;    dex
+00012Cr 1               ;   bne WaitFineScanline
+00012Cr 1               
+00012Cr 1  A9 90            LDA #%10010000   ; enable NMI, sprites from Pattern Table 0, background from Pattern Table 1
+00012Er 1  8D 00 20         STA $2000
+000131r 1               ;before we exit interrupt, lets update sprite shadow ram!
+000131r 1  20 rr rr         jsr updatetext
+000134r 1                   ;pull off stack
+000134r 1  68               pla
+000135r 1  A8               tay
+000136r 1  68               pla
+000137r 1  AA               tax
+000138r 1  68               pla
+000139r 1               
+000139r 1  40           	rti			; return from interrupt
+00013Ar 1               
+00013Ar 1               updatetext:
+00013Ar 1               ; we need to check the X pos of each word we want to update and update the X
+00013Ar 1               ; coordinate of each sprite.  a variable tells us if we are about to go off
+00013Ar 1               ; screen
+00013Ar 1                   ; sprites 1 - 7
+00013Ar 1               ;    lda $0207
+00013Ar 1               ;    clc
+00013Ar 1               ;    adc #$01
+00013Ar 1               ;    sta $0207
+00013Ar 1               ;    lda $020b
+00013Ar 1               ;    clc
+00013Ar 1               ;    adc #$01
+00013Ar 1               ;    sta $020b
+00013Ar 1               ; using a macro lol
+00013Ar 1  18 AD 07 02      addone $0207
+00013Er 1  69 01 8D 07  
+000142r 1  02           
+000143r 1  18 AD 0B 02      addone $020B
+000147r 1  69 01 8D 0B  
+00014Br 1  02           
+00014Cr 1  18 AD 0F 02      addone $020F
+000150r 1  69 01 8D 0F  
+000154r 1  02           
+000155r 1  18 AD 13 02      addone $0213
+000159r 1  69 01 8D 13  
+00015Dr 1  02           
+00015Er 1  18 AD 17 02      addone $0217
+000162r 1  69 01 8D 17  
+000166r 1  02           
+000167r 1  18 AD 1B 02      addone $021B
+00016Br 1  69 01 8D 1B  
+00016Fr 1  02           
+000170r 1  18 AD 1F 02      addone $021F
+000174r 1  69 01 8D 1F  
+000178r 1  02           
+000179r 1                   ; to = 2 sprites
+000179r 1  38 AD 23 02      subone $0223
+00017Dr 1  E9 01 8D 23  
+000181r 1  02           
+000182r 1  38 AD 27 02      subone $0227
+000186r 1  E9 01 8D 27  
+00018Ar 1  02           
+00018Br 1                   ; heatsync = 8 sprites
+00018Br 1  18 AD 2B 02      addone $022B
+00018Fr 1  69 01 8D 2B  
+000193r 1  02           
+000194r 1  18 AD 2F 02      addone $022F
+000198r 1  69 01 8D 2F  
+00019Cr 1  02           
+00019Dr 1  18 AD 33 02      addone $0233
+0001A1r 1  69 01 8D 33  
+0001A5r 1  02           
+0001A6r 1  18 AD 37 02      addone $0237
+0001AAr 1  69 01 8D 37  
+0001AEr 1  02           
+0001AFr 1  18 AD 3B 02      addone $023B
+0001B3r 1  69 01 8D 3B  
+0001B7r 1  02           
+0001B8r 1  18 AD 3F 02      addone $023F
+0001BCr 1  69 01 8D 3F  
+0001C0r 1  02           
+0001C1r 1  18 AD 43 02      addone $0243
+0001C5r 1  69 01 8D 43  
+0001C9r 1  02           
+0001CAr 1  18 AD 47 02      addone $0247
+0001CEr 1  69 01 8D 47  
+0001D2r 1  02           
+0001D3r 1                   ; labs = 4 sprites
+0001D3r 1  38 AD 4B 02      subone $024B
+0001D7r 1  E9 01 8D 4B  
+0001DBr 1  02           
+0001DCr 1  38 AD 4F 02      subone $024F
+0001E0r 1  E9 01 8D 4F  
+0001E4r 1  02           
+0001E5r 1  38 AD 53 02      subone $0253
+0001E9r 1  E9 01 8D 53  
+0001EDr 1  02           
+0001EEr 1  38 AD 57 02      subone $0257
+0001F2r 1  E9 01 8D 57  
+0001F6r 1  02           
+0001F7r 1  60               rts
+0001F8r 1               
+0001F8r 1               background:
+0001F8r 1  00 00 00 00  	.incbin "FullNTHSL.nam"  ; one row is not correct in the middle, will fix later
+0001FCr 1  00 00 00 00  
+000200r 1  00 00 00 00  
+0005B8r 1               
+0005B8r 1               palette:
+0005B8r 1               	;; Background palette
+0005B8r 1  0D 05 27 0F  	.byte 	$0D,$05,$27,$0F
+0005BCr 1  0D 05 27 0F  	.byte 	$0D,$05,$27,$0F
+0005C0r 1  0D 05 27 0F  	.byte 	$0D,$05,$27,$0F
+0005C4r 1  0D 05 27 0F  	.byte 	$0D,$05,$27,$0F
+0005C8r 1               	;; Sprite palette
+0005C8r 1  22 05 27 18  	.byte	$22,$05,$27,$18  ; palette 0 for sprite 0 , hides sprite0 hit
+0005CCr 1  22 0D 15 14  	.byte	$22,$0D,$15,$14  ; font 1
+0005D0r 1  22 02 38 3C   	.byte	$22,$02,$38,$3C  ; font 2 - unused
+0005D4r 1  22 1C 15 14  	.byte	$22,$1C,$15,$14  ; font 3 - unused
+0005D8r 1               
+0005D8r 1               sprites:  ; 6F             C0 gives 1 row incorrect.
+0005D8r 1  6B FF 00 C0      .byte   $6B, $FF, $00, $C0 ; sprite 0  ; a single pixel in the lower right corner
+0005DCr 1                   ; 78, , , C0   gives 1/2 the tiles drawn from each bank.
+0005DCr 1                   ;WELCOME = $BB, $B3, $B5, $B2, $B8, $B6, $B3
+0005DCr 1                   ;
+0005DCr 1  20 BB 01 4A      .byte  $20, $BB, $01, $4A
+0005E0r 1  20 B3 01 53      .byte  $20, $B3, $01, $53
+0005E4r 1  20 B5 01 5B      .byte  $20, $B5, $01, $5B
+0005E8r 1  20 B2 01 63      .byte  $20, $B2, $01, $63
+0005ECr 1  20 B8 01 6A      .byte  $20, $B8, $01, $6A
+0005F0r 1  20 B6 01 72      .byte  $20, $B6, $01, $72
+0005F4r 1  20 B3 01 7A      .byte  $20, $B3, $01, $7A
+0005F8r 1                   ; TO = $BA, $B8
+0005F8r 1  29 BA 01 5C      .byte  $29, $BA, $01, $5C
+0005FCr 1  29 B8 01 63      .byte  $29, $B8, $01, $63
+000600r 1                   ; HEATSYNC = $B4, $B3, $B0, $BA, $B9, $BC, $B7, $B2
+000600r 1  31 B4 01 4A      .byte  $31, $B4, $01, $4A
+000604r 1  31 B3 01 53      .byte  $31, $B3, $01, $53
+000608r 1  31 B0 01 5B      .byte  $31, $B0, $01, $5B
+00060Cr 1  31 BA 01 63      .byte  $31, $BA, $01, $63
+000610r 1  31 B9 01 6A      .byte  $31, $B9, $01, $6A
+000614r 1  31 BC 01 72      .byte  $31, $BC, $01, $72
+000618r 1  31 B7 01 7A      .byte  $31, $B7, $01, $7A
+00061Cr 1  31 B2 01 82      .byte  $31, $B2, $01, $82
+000620r 1                   ;LABS = $B5, $B0, $B1, $B9
+000620r 1  40 B5 01 80      .byte  $40, $B5, $01, $80
+000624r 1  40 B0 01 89      .byte  $40, $B0, $01, $89
+000628r 1  40 B1 01 90      .byte  $40, $B1, $01, $90
+00062Cr 1  40 B9 01 99      .byte  $40, $B9, $01, $99
+000630r 1               ;;;;;;;;;;;;;;
+000630r 1               
+000630r 1               .segment "VECTORS"
+000000r 1               
+000000r 1  00 00 00 00  	.word	0, 0, 0		; Unused, but needed to advance PC to $fffa.
+000004r 1  00 00        
+000006r 1               	;; When an NMI happens (once per frame if enabled) the label nmi:
+000006r 1  rr rr        	.word	nmi
+000008r 1               	;; When the processor first turns on or is reset, it will jump
+000008r 1               	;; to the label reset:
+000008r 1  rr rr        	.word	reset
+00000Ar 1               	;; External interrupt IRQ is not used in this tutorial
+00000Ar 1  00 00        	.word	0
+00000Cr 1               
+00000Cr 1               ;;;;;;;;;;;;;;
+00000Cr 1               
+00000Cr 1               .segment "CHARS"
+000000r 1               ;    .incbin "HSLTop0.chr"   ; $FF file has 1 pixel for sprite0 detection
+000000r 1               ;	.incbin	"HSLBot.chr"	; includes 8KB graphics we need
+000000r 1  00 00 00 00      .incbin "HSLLetters.chr" ; both patterns
+000004r 1  00 00 00 00  
+000008r 1  00 00 00 00  
+000000r 1               
