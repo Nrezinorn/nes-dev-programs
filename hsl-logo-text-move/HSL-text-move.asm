@@ -5,6 +5,7 @@
     adc #$01
     sta addr
 .endmacro
+; ... and sbc
 
 .macro subone addr
     sec
@@ -134,12 +135,12 @@ init_sprite0:
 ;	sta	$2001		;  no clipping on left
 
 initvars:
-    LDA #$00
-    STA $00
-    STA $01
-    STA $02
+    LDA #$00 ; 
+    STA $00 ; store 0 for text movement flag
+    STA $01 ; 0 = left
+    STA $02 ; 1 = right
     LDA #$01  
-    STA $03
+    STA $03 ; 0 = up , 1 = down
 
 forever:
 	jmp	forever

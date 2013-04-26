@@ -1,17 +1,12 @@
-HSL.nes
+HSL-logo-text-move.nes
 ===========================
-NES Rom to Display the HeatSync Labs logo.  NTSC Version.  Forcing PAL mode results in graphical glitches.  Too excited/lazy that this is finally working to care!
+NES Rom to Display the HeatSync Labs logo with text and move it around.  NTSC Version.  Forcing PAL mode results in graphical glitches - still!
 
 http://www.heatsynclabs.org
 
 Tools Used:
 -------------------------
- * nestile - http://ensomnya.net/projects/nestile/index.html
- * NES Screen Tool - http://shiru.untergrund.net/files/nesst.zip
- * BLESS Hex Editor - http://home.gna.org/bless/
- * Google - www.google.com
+ * CA65 - www.cc65.org
  * NESdev.com - Wiki pages, and forums
 
  
-Thanks to the developers of these tools! 
-And a special thanks to jero32 on #NESdev!
