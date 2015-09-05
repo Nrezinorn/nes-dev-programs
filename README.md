@@ -1,8 +1,12 @@
-Program List
+Source Available
 =============
-hsl-logo - NES Program that Displays the HeatSync Labs Logo.  Added 2/19/2013
-hsl-logo-text - Updated hsl-logo that displays sprite text.
-hsl-logo-text-move - Updated to move the sprites around!
+* cc65 - programs that build with cc65
+* ophis - programs that build with ophis assembler
+* pynes - programs that build with pyNES
+
+WIP
+============
+Re-writing cc65 programs for ophis and pyNES
 
 Helpful Links
 -------------
