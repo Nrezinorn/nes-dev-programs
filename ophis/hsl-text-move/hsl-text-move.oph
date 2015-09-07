@@ -1,0 +1,16 @@
+;ines header
+.byte "NES"  ; ines 0-2
+.byte $1A  ; ines 3
+.byte $01  ; num prg rom in 16k size
+.byte $01 ; chr rom 8k in size
+.byte %00000000  ; vertical mirroring
+.byte %00000000	; mapper #0
+.byte $00 			; No PRG-RAM, inferring 8KB for compatibility.
+.byte $00 			; TV system specification (NTSC)
+.byte %00010000	; TV Specification bits (NTSC), no SRAM, no bus conflicts.
+.byte $00,$00,$00,$00,$00 ; Zero-fill remaining header bytes.
+
+.outfile "hsl-text-move.nes"
+
+.include "hsl-text-move_prg.oph"
+.include "hsl-text-move_chr.oph"
