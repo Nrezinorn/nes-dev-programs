@@ -1,6 +1,6 @@
-ca65 V2.13.9 - (C) Copyright 1998-2011 Ullrich von Bassewitz
-Main file   : HSL.asm
-Current file: HSL.asm
+ca65 V2.19 - Git d3ef3e1b6
+Main file   : HSL.s
+Current file: HSL.s
 
 000000r 1               .segment "HEADER"
 000000r 1               
@@ -220,19 +220,21 @@ Current file: HSL.asm
 00051Br 1               
 00051Br 1               .segment "VECTORS"
 000000r 1               
-000000r 1  00 00 00 00  	.word	0, 0, 0		; Unused, but needed to advance PC to $fffa.
-000004r 1  00 00        
-000006r 1               	;; When an NMI happens (once per frame if enabled) the label nmi:
-000006r 1  rr rr        	.word	nmi
-000008r 1               	;; When the processor first turns on or is reset, it will jump
-000008r 1               	;; to the label reset:
-000008r 1  rr rr        	.word	reset
-00000Ar 1               	;; External interrupt IRQ is not used in this tutorial
-00000Ar 1  00 00        	.word	0
-00000Cr 1               
-00000Cr 1               ;;;;;;;;;;;;;;
-00000Cr 1               
-00000Cr 1               .segment "CHARS"
+000000r 1               	;; Later CC65 versions do not need the following 3 bytes.  Errors are produced when
+000000r 1               	;; they exist:
+000000r 1               	;; ld65: Warning: /usr/share/cc65/cfg/nes.cfg:18: Segment 'VECTORS' overflows memory area 'ROMV' by 6 bytes
+000000r 1               	;; word	0, 0, 0		; Unused, but needed to advance PC to $fffa.
+000000r 1               	;; When an NMI happens (once per frame if enabled) the label nmi:
+000000r 1  rr rr        	.word	nmi
+000002r 1               	;; When the processor first turns on or is reset, it will jump
+000002r 1               	;; to the label reset:
+000002r 1  rr rr        	.word	reset
+000004r 1               	;; External interrupt IRQ is not used in this tutorial
+000004r 1  00 00        	.word	0
+000006r 1               
+000006r 1               ;;;;;;;;;;;;;;
+000006r 1               
+000006r 1               .segment "CHARS"
 000000r 1               ;    .incbin "HSLTop0.chr"   ; $FF file has 1 pixel for sprite0 detection
 000000r 1               ;	.incbin	"HSLBot.chr"	; includes 8KB graphics we need
 000000r 1  00 00 00 00      .incbin "HSLtopbot.chr" ; both patterns

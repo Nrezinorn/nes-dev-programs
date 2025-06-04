@@ -1,4 +1,4 @@
 PROGRAM	= HSL-text-move
-SOURCES	= HSL-text-move.asm
+SOURCES	= HSL-text-move.s
 
 include ./common.mk
