@@ -1,4 +1,4 @@
 PROGRAM	= HSL
-SOURCES	= HSL.asm
+SOURCES	= HSL.s
 
 include ./common.mk

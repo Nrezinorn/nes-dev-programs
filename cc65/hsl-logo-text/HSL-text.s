@@ -235,7 +235,10 @@ sprites:  ; 6F             C0 gives 1 row incorrect.
   
 .segment "VECTORS"
 
-	.word	0, 0, 0		; Unused, but needed to advance PC to $fffa.
+	;; Later CC65 versions do not need the following 3 bytes.  Errors are produced when 
+	;; they exist:
+	;; ld65: Warning: /usr/share/cc65/cfg/nes.cfg:18: Segment 'VECTORS' overflows memory area 'ROMV' by 6 bytes
+	;; word	0, 0, 0		; Unused, but needed to advance PC to $fffa.
 	;; When an NMI happens (once per frame if enabled) the label nmi:
 	.word	nmi
 	;; When the processor first turns on or is reset, it will jump

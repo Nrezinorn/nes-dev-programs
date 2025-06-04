@@ -1,4 +1,4 @@
 PROGRAM	= HSL-text
-SOURCES	= HSL-text.asm
+SOURCES	= HSL-text.s
 
 include ./common.mk
